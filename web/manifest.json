@@ -1,6 +1,6 @@
 {
-    "name": "Ranked",
-    "short_name": "Ranked",
+    "name": "👑",
+    "short_name": "👑",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#F5F6FA",
@@ -9,6 +9,11 @@
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
+        {
+            "src": "icons/crown.svg",
+            "sizes": "any",
+            "type": "image/svg+xml"
+        },
         {
             "src": "icons/Icon-192.png",
             "sizes": "192x192",

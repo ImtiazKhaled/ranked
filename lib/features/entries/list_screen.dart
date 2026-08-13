@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../providers/providers.dart';
 import '../../theme/app_theme.dart';
-import '../../theme/gradients.dart';
 import '../../widgets/tag_chip.dart';
 import 'entry_card.dart';
 
@@ -38,17 +37,9 @@ class ListScreen extends ConsumerWidget {
             expandedHeight: 96,
             flexibleSpace: FlexibleSpaceBar(
               titlePadding: const EdgeInsets.only(left: 20, bottom: 16),
-              title: ShaderMask(
-                shaderCallback: (rect) =>
-                    AppGradients.brand.createShader(rect),
-                child: const Text(
-                  'Ranked',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 26,
-                    color: Colors.white,
-                  ),
-                ),
+              title: const Text(
+                '👑',
+                style: TextStyle(fontSize: 30),
               ),
             ),
           ),

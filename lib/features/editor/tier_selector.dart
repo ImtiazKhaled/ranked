@@ -57,14 +57,6 @@ class _TierOption extends StatelessWidget {
                 : tier.colorStart.withValues(alpha: 0.55),
             width: selected ? 2 : 1.5,
           ),
-          boxShadow: selected
-              ? [
-                  BoxShadow(
-                    color: tier.colorEnd.withValues(alpha: 0.5),
-                    blurRadius: 14,
-                  ),
-                ]
-              : null,
         ),
         child: Text(
           tier.label,
