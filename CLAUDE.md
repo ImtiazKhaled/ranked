@@ -93,18 +93,36 @@ Routes (`app.dart`): `/` → list, `/entry/new` → create, `/entry/:id` → edi
 The most custom piece. A hover/tap flyout ("dial") anchored to the "Add emotion"
 button — FB-reaction style, three tiers deep.
 
-- Opens on hover (and tap for touch) via `OverlayPortal` + `CompositedTransformFollower`
-  anchored to the button's centre. Hover-forgiving close (180 ms timer).
-- Three **concentric solid arc "cylinder" bands** (`_BandPainter`), one per tier,
-  radii `_r1=116 / _r2=196 / _r3=276` (kept **equidistant**, 80px gaps). Band
-  thickness `_band=66`.
+- Opens on hover (desktop) or on press-and-drag / tap (touch) via `OverlayPortal` +
+  `CompositedTransformFollower`. Hover-forgiving close (180 ms timer).
+- Three **concentric solid arc "cylinder" bands** (`_BandPainter`), one per tier.
+  Base radii `_kR1=116 / _kR2=196 / _kR3=276` (kept **equidistant**, 80px gaps),
+  band thickness `_kBand=66` — all multiplied by a runtime **`_scale`**.
 - Emojis are bare (no container) with **bold labels** underneath (`FittedBox`
-  scale-down so long names fit).
-- **Placement**: the fan leans clockwise into the empty space right of the button
-  and may dip lower-right. The left side is capped by a **radius-aware** function
-  `_leftCap(r)` derived from `_leftReachPx` (max px left of hinge) so no arc at any
-  depth crosses the form's left edge. `_rightCap` sets the lower-right reach.
-  Tuning knobs: **`_leftReachPx`** (pull fan left/right), **`_rightCap`** (lean).
+  scale-down so long names fit). Each node is **two boxes**: a wide,
+  `IgnorePointer` visual and a narrow hit target one arc-step wide, so taps and
+  hovers land on the emotion they look like they landed on.
+- **Fitting the viewport** — `_measure()` (on open + on MediaQuery change) records
+  the trigger's centre and the free space around it, then picks `_scale`.
+  `_window(r)` returns the angular window per tier: the tuned desktop lean
+  (`_kLeftReachPx` / `_kRightCap`) **intersected** with caps derived from the real
+  screen edges. On a wide screen the screen caps are inert and the fan keeps its
+  clockwise right-lean; on a phone they swing it upward so tier 3 stays reachable.
+  Tuning knobs: **`_kLeftReachPx`** (pull fan left/right), **`_kRightCap`** (lean).
+- **Two things that will silently break the hinge** if you touch them:
+  1. The dial box is a square centred on the hinge and is **wider than a phone
+     screen** — it must be sized by the `Positioned` in `_buildOverlay`, or the
+     Stack's loose constraints squeeze it and slide the hinge off the button.
+  2. The trigger has a **fixed-width label column** (`_kLabelWidth`). The live
+     preview swaps in names of very different lengths; letting the button resize
+     drags the whole dial around under the cursor mid-selection.
+- **Touch**: a `PanGestureRecognizer` on the trigger with a tight `touchSlop` (so it
+  beats the editor's `ListView` in the gesture arena) — press, slide out through
+  the tiers, lift on a tertiary to commit. `_hitTest()` resolves the finger to a
+  node analytically from polar coordinates rather than by widget hit-testing.
+  Lifting off the bands selects nothing and leaves the dial open for tap-to-drill.
+- Covered by `test/emotion_picker_test.dart`, which asserts every
+  primary/secondary pair keeps its tertiary leaves on screen at 390×844.
 - The trigger button **live-previews** the hovered emotion; the parent path
   (`Primary › Secondary`) shows **above** the leaf name. Clicking a tertiary commits.
 - Emotion taxonomy + per-primary colours live in `data/emotion_wheel_data.dart`

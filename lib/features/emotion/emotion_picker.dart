@@ -45,6 +45,7 @@ class _EmotionPickerState extends State<EmotionPicker> {
   static const double _kTertiaryStep = 20; // deg between tertiaries
   static const double _kEdgePad = 8; // keep this clear of the viewport edge
   static const double _kMinScale = 0.55;
+  static const double _kLabelWidth = 130; // keeps the trigger a constant size
 
   final GlobalKey _triggerKey = GlobalKey();
   final LayerLink _link = LayerLink();
@@ -64,6 +65,7 @@ class _EmotionPickerState extends State<EmotionPicker> {
   double _availLeft = double.infinity;
   double _availRight = double.infinity;
   double _availTop = double.infinity;
+  double _availBottom = double.infinity;
   Offset _hingeGlobal = Offset.zero;
 
   // --- touch drag state ---
@@ -161,14 +163,22 @@ class _EmotionPickerState extends State<EmotionPicker> {
 
   // --- measuring the room the dial has ---
 
-  /// Records the trigger's centre and how much space surrounds it, then picks a
-  /// scale at which the whole fan fits. Cheap; called on every open and on any
-  /// MediaQuery change while open.
-  void _measure() {
+  /// The trigger's centre in global coordinates — where the dial's follower
+  /// puts the hinge. Re-read before hit-testing so the maths can never drift
+  /// from what is on screen.
+  Offset? _triggerCentre() {
     final box = _triggerKey.currentContext?.findRenderObject() as RenderBox?;
-    if (box == null || !box.hasSize) return;
+    if (box == null || !box.hasSize) return null;
+    return box.localToGlobal(box.size.center(Offset.zero));
+  }
 
-    final centre = box.localToGlobal(box.size.center(Offset.zero));
+  /// Records the trigger's centre and how much room surrounds it, then picks a
+  /// scale at which the whole fan fits. Called on open and on any MediaQuery
+  /// change while open.
+  void _measure() {
+    final centre = _triggerCentre();
+    if (centre == null) return;
+
     final screen = MediaQuery.sizeOf(context);
     final safe = MediaQuery.viewPaddingOf(context);
 
@@ -176,6 +186,8 @@ class _EmotionPickerState extends State<EmotionPicker> {
     _availLeft = math.max(0, centre.dx - safe.left - _kEdgePad);
     _availRight = math.max(0, screen.width - centre.dx - safe.right - _kEdgePad);
     _availTop = math.max(0, centre.dy - safe.top - _kEdgePad);
+    _availBottom =
+        math.max(0, screen.height - centre.dy - safe.bottom - _kEdgePad);
 
     // Fit vertically (the fan reaches straight up) and horizontally (it needs
     // one roomy side to lean into, plus a little of the other).
@@ -205,11 +217,14 @@ class _EmotionPickerState extends State<EmotionPicker> {
     // Aesthetic cap: no node extends more than _kLeftReachPx left of the hinge.
     final leanCap =
         180 - _deg(math.acos((_kLeftReachPx * _scale / r).clamp(0.0, 1.0)));
-    // Viewport caps: r*cos(theta) +/- reach must stay inside the screen.
+    // Viewport caps: r*cos(theta) +/- reach must stay inside the screen, and
+    // the fan's lower-right dip must not run past the bottom edge.
     final leftBound = _deg(math.acos((-(_availLeft - reach) / r).clamp(-1.0, 1.0)));
     final rightBound = _deg(math.acos(((_availRight - reach) / r).clamp(-1.0, 1.0)));
+    final bottomBound =
+        -_deg(math.asin(((_availBottom - _band / 2) / r).clamp(-1.0, 1.0)));
 
-    var lo = math.max(_kRightCap, rightBound);
+    var lo = math.max(_kRightCap, math.max(rightBound, bottomBound));
     var hi = math.min(leanCap, leftBound);
     if (hi < lo) {
       final mid = (lo + hi) / 2;
@@ -279,6 +294,7 @@ class _EmotionPickerState extends State<EmotionPicker> {
   /// Which node (if any) sits under a global point. Tiers are tested outermost
   /// first so an overlapping tolerance prefers the deeper selection.
   _Hit? _hitTest(Offset global) {
+    _hingeGlobal = _triggerCentre() ?? _hingeGlobal;
     final local = global - _hingeGlobal; // canvas coords: y grows downward
     final r = local.distance;
     if (r < 1) return null;
@@ -439,20 +455,37 @@ class _EmotionPickerState extends State<EmotionPicker> {
                   children: [
                     Text(emoji, style: const TextStyle(fontSize: 24)),
                     const SizedBox(width: 10),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (subtitle != null && subtitle.isNotEmpty)
+                    // Fixed width: the live preview swaps in names of wildly
+                    // different lengths, and a button that resizes under the
+                    // cursor drags the whole dial around with it.
+                    SizedBox(
+                      width: _kLabelWidth,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (subtitle != null && subtitle.isNotEmpty)
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  subtitle,
+                                  maxLines: 1,
+                                  style: const TextStyle(
+                                      fontSize: 11, color: AppTheme.textMuted),
+                                ),
+                              ),
+                            ),
                           Text(
-                            subtitle,
-                            style: const TextStyle(
-                                fontSize: 11, color: AppTheme.textMuted),
+                            label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontWeight: FontWeight.w700),
                           ),
-                        Text(label,
-                            style:
-                                const TextStyle(fontWeight: FontWeight.w700)),
-                      ],
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -517,24 +550,36 @@ class _EmotionPickerState extends State<EmotionPicker> {
             onTap: _close,
           ),
         ),
-        CompositedTransformFollower(
-          link: _link,
-          targetAnchor: Alignment.center,
-          followerAnchor: Alignment.center,
-          child: MouseRegion(
-            onEnter: (_) => _cancelClose(),
-            onExit: (_) {
-              if (_touchMode) return;
-              _clearPreview();
-              _scheduleClose();
-            },
-            // Dead space inside the dial box dismisses; node taps win the arena.
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: _close,
-              child: Material(
-                type: MaterialType.transparency,
-                child: _buildDial(),
+        // The dial box is wider than a phone screen. Sizing it through a
+        // Positioned keeps it at its natural size — left to the Stack's loose
+        // constraints it would be squeezed to the viewport width, which slides
+        // the hinge off the button's centre. The follower's layout position is
+        // irrelevant (its layer transform places it against the target), so
+        // pinning it at 0,0 only fixes its size.
+        Positioned(
+          left: 0,
+          top: 0,
+          width: _side,
+          height: _side,
+          child: CompositedTransformFollower(
+            link: _link,
+            targetAnchor: Alignment.center,
+            followerAnchor: Alignment.center,
+            child: MouseRegion(
+              onEnter: (_) => _cancelClose(),
+              onExit: (_) {
+                if (_touchMode) return;
+                _clearPreview();
+                _scheduleClose();
+              },
+              // Dead space in the dial box dismisses; node taps win the arena.
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: _close,
+                child: Material(
+                  type: MaterialType.transparency,
+                  child: _buildDial(),
+                ),
               ),
             ),
           ),
@@ -575,9 +620,10 @@ class _EmotionPickerState extends State<EmotionPicker> {
 
           // Tier 3 — tertiaries.
           for (var i = 0; i < l.tertiary.length; i++)
-            _node(
+            ..._node(
               angle: l.tertiary[i],
               radius: _r3,
+              stepPx: _stepPx(l.tertiary, _r3),
               emojiSize: _emojiSize(25),
               node: kEmotionWheel[_activePrimary!]
                   .children[_activeSecondary!]
@@ -605,9 +651,10 @@ class _EmotionPickerState extends State<EmotionPicker> {
 
           // Tier 2 — secondaries.
           for (var i = 0; i < l.secondary.length; i++)
-            _node(
+            ..._node(
               angle: l.secondary[i],
               radius: _r2,
+              stepPx: _stepPx(l.secondary, _r2),
               emojiSize: _emojiSize(26),
               node: kEmotionWheel[_activePrimary!].children[i],
               color: activeColor,
@@ -623,9 +670,10 @@ class _EmotionPickerState extends State<EmotionPicker> {
 
           // Tier 1 — primaries (always visible, drawn on top).
           for (var i = 0; i < l.primary.length; i++)
-            _node(
+            ..._node(
               angle: l.primary[i],
               radius: _r1,
+              stepPx: _stepPx(l.primary, _r1),
               emojiSize: _emojiSize(27),
               node: kEmotionWheel[i],
               color: primaryEmotionColor(kEmotionWheel[i].name),
@@ -653,9 +701,14 @@ class _EmotionPickerState extends State<EmotionPicker> {
   double _emojiSize(double base) => math.max(18, base * _scale);
   double get _labelSize => math.max(9, 11 * _scale);
 
-  Widget _node({
+  /// Labels are wider than the arc spacing, so neighbouring nodes overlap. Each
+  /// node is therefore drawn as two boxes: a wide, pointer-transparent visual,
+  /// and a narrow hit target one arc-step wide so a tap or hover always lands
+  /// on the emotion it looks like it landed on.
+  List<Widget> _node({
     required double angle,
     required double radius,
+    required double stepPx,
     required double emojiSize,
     required EmotionNode node,
     required Color color,
@@ -664,17 +717,15 @@ class _EmotionPickerState extends State<EmotionPicker> {
     required VoidCallback onTap,
   }) {
     final pos = _polar(radius, angle);
-    return Positioned(
-      left: pos.dx - _nodeW / 2,
-      top: pos.dy - _band / 2,
-      width: _nodeW,
-      height: _band,
-      child: MouseRegion(
-        onEnter: (_) => onEnter(),
-        cursor: SystemMouseCursors.click,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: onTap,
+    final hitWidth = stepPx.clamp(28.0, _nodeW);
+
+    return [
+      Positioned(
+        left: pos.dx - _nodeW / 2,
+        top: pos.dy - _band / 2,
+        width: _nodeW,
+        height: _band,
+        child: IgnorePointer(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -705,8 +756,27 @@ class _EmotionPickerState extends State<EmotionPicker> {
           ),
         ),
       ),
-    );
+      Positioned(
+        left: pos.dx - hitWidth / 2,
+        top: pos.dy - _band / 2,
+        width: hitWidth,
+        height: _band,
+        child: MouseRegion(
+          onEnter: (_) => onEnter(),
+          cursor: SystemMouseCursors.click,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onTap,
+          ),
+        ),
+      ),
+    ];
   }
+
+  /// Arc distance in px between neighbouring items on a tier.
+  double _stepPx(List<double> angles, double radius) => angles.length > 1
+      ? (angles[0] - angles[1]).abs() * math.pi / 180 * radius
+      : _nodeW;
 
   /// A darker, legible variant of a node colour for active labels.
   Color _readable(Color c) {

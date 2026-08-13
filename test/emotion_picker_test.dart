@@ -17,10 +17,7 @@ Widget _harness({EmotionRef? value, ValueChanged<EmotionRef?>? onChanged}) {
             padding: const EdgeInsets.all(20),
             children: [
               const SizedBox(height: 300), // Summary / Description / Rank
-              EmotionPicker(
-                value: value,
-                onChanged: onChanged ?? (_) {},
-              ),
+              EmotionPicker(value: value, onChanged: onChanged ?? (_) {}),
               const SizedBox(height: 400),
             ],
           ),
@@ -30,9 +27,33 @@ Widget _harness({EmotionRef? value, ValueChanged<EmotionRef?>? onChanged}) {
   );
 }
 
-/// Walks the dial down to [primary] › [secondary] by tapping, then returns the
-/// on-screen rects of the two tertiary leaves that appear.
-Future<List<Rect>> _openTo(
+/// The full box a node paints into (emoji + label), not just its label.
+///
+/// The trigger button previews the name you're on, so the same text can appear
+/// twice; the node's own [IgnorePointer] wrapper is the smallest box of the
+/// candidates (route-level IgnorePointers cover the whole page).
+Rect _nodeRect(WidgetTester tester, String name) {
+  final boxes = find
+      .ancestor(of: find.text(name), matching: find.byType(IgnorePointer))
+      .evaluate()
+      .map((e) => e.renderObject! as RenderBox)
+      .map((b) => b.localToGlobal(Offset.zero) & b.size)
+      .toList()
+    ..sort((a, b) => (a.width * a.height).compareTo(b.width * b.height));
+
+  expect(boxes, isNotEmpty, reason: 'no node box rendered for "$name"');
+  return boxes.first;
+}
+
+/// Taps a node dead centre. Labels are pointer-transparent — the hit target is
+/// a separate, narrower box centred on the same point — so tap by position.
+Future<void> _tapNode(WidgetTester tester, String name) async {
+  await tester.tapAt(_nodeRect(tester, name).center);
+  await tester.pumpAndSettle();
+}
+
+/// Walks the dial down to [primary] › [secondary] by tapping.
+Future<void> _openTo(
   WidgetTester tester,
   String primary,
   String secondary,
@@ -40,60 +61,60 @@ Future<List<Rect>> _openTo(
   await tester.tap(find.text('Add emotion'));
   await tester.pumpAndSettle();
 
-  await tester.tap(find.text(primary));
-  await tester.pumpAndSettle();
-
-  await tester.tap(find.text(secondary));
-  await tester.pumpAndSettle();
-
-  final node = kEmotionWheel
-      .firstWhere((p) => p.name == primary)
-      .children
-      .firstWhere((s) => s.name == secondary);
-
-  return [
-    for (final leaf in node.children) tester.getRect(find.text(leaf.name)),
-  ];
+  await _tapNode(tester, primary);
+  await _tapNode(tester, secondary);
 }
 
 void main() {
-  group('emotion dial fits a phone viewport', () {
+  group('emotion dial on a phone viewport', () {
     setUp(() {
-      // iPhone-ish logical size.
-      final view = TestWidgetsFlutterBinding.ensureInitialized().platformDispatcher.views.first;
-      view.physicalSize = const Size(390 * 3, 844 * 3);
+      final view = TestWidgetsFlutterBinding.ensureInitialized()
+          .platformDispatcher
+          .views
+          .first;
+      view.physicalSize = const Size(390 * 3, 844 * 3); // iPhone-ish
       view.devicePixelRatio = 3;
     });
 
     tearDown(() {
-      final view = TestWidgetsFlutterBinding.ensureInitialized().platformDispatcher.views.first;
+      final view = TestWidgetsFlutterBinding.ensureInitialized()
+          .platformDispatcher
+          .views
+          .first;
       view.resetPhysicalSize();
       view.resetDevicePixelRatio();
     });
 
     testWidgets('every tertiary leaf stays inside the screen', (tester) async {
       const screen = Rect.fromLTWH(0, 0, 390, 844);
+      final problems = <String>[];
 
-      // Check every primary/secondary combination — the widest fans are the
-      // ones most likely to overflow.
+      // Check every primary/secondary pair — the widest fans overflow first.
       for (final primary in kEmotionWheel) {
         for (final secondary in primary.children) {
+          final path = '${primary.name} › ${secondary.name}';
+
+          // Tear the tree down so each pair starts from a closed dial.
+          await tester.pumpWidget(const SizedBox.shrink());
           await tester.pumpWidget(_harness());
           await tester.pumpAndSettle();
 
-          final rects = await _openTo(tester, primary.name, secondary.name);
-          expect(rects, isNotEmpty);
+          await _openTo(tester, primary.name, secondary.name);
 
-          for (final r in rects) {
-            expect(
-              screen.contains(r.topLeft) && screen.contains(r.bottomRight),
-              isTrue,
-              reason: '${primary.name} › ${secondary.name} leaf at $r '
-                  'is outside $screen',
-            );
+          for (final leaf in secondary.children) {
+            if (find.text(leaf.name).evaluate().isEmpty) {
+              problems.add('$path › ${leaf.name}: never rendered');
+              continue;
+            }
+            final r = _nodeRect(tester, leaf.name);
+            if (!screen.contains(r.topLeft) || !screen.contains(r.bottomRight)) {
+              problems.add('$path › ${leaf.name}: box $r is outside $screen');
+            }
           }
         }
       }
+
+      expect(problems, isEmpty, reason: problems.join('\n'));
     });
 
     testWidgets('the dial hinges on the centre of the trigger button',
@@ -101,28 +122,20 @@ void main() {
       await tester.pumpWidget(_harness());
       await tester.pumpAndSettle();
 
-      final trigger = tester.getRect(find.text('Add emotion'));
+      final button = tester.getRect(find.byType(CompositedTransformTarget));
+
       await tester.tap(find.text('Add emotion'));
       await tester.pumpAndSettle();
 
-      // Primaries all sit on one circle; its centre is the hinge.
-      final points = [
-        for (final p in kEmotionWheel) tester.getRect(find.text(p.name)).center,
-      ];
+      // Primaries all sit on one circle; its centre is the dial's hinge.
+      final hinge = _fitCircleCentre(
+        [for (final p in kEmotionWheel) _nodeRect(tester, p.name).center],
+      );
 
-      // The button's centre is a little left of the label's centre (the emoji
-      // sits before it), so derive the hinge from the geometry instead: the
-      // radii from the true hinge are all equal.
-      final hinge = _fitCircleCentre(points);
-      final radii = [for (final p in points) (p - hinge).distance];
-      final spread = radii.reduce((a, b) => a > b ? a : b) -
-          radii.reduce((a, b) => a < b ? a : b);
-      expect(spread, lessThan(6), reason: 'primaries are not concentric');
-
-      // That centre must land on the trigger button, vertically dead-centre.
-      expect((hinge.dy - trigger.center.dy).abs(), lessThan(14));
-      expect(hinge.dx, greaterThan(trigger.left - 60));
-      expect(hinge.dx, lessThan(trigger.right + 10));
+      expect((hinge.dx - button.center.dx).abs(), lessThan(2),
+          reason: 'hinge $hinge is not horizontally centred on $button');
+      expect((hinge.dy - button.center.dy).abs(), lessThan(2),
+          reason: 'hinge $hinge is not vertically centred on $button');
     });
 
     testWidgets('tapping through the tiers commits the leaf', (tester) async {
@@ -131,13 +144,72 @@ void main() {
       await tester.pumpAndSettle();
 
       await _openTo(tester, 'Happy', 'Optimistic');
-      await tester.tap(find.text('Hopeful'));
-      await tester.pumpAndSettle();
+      await _tapNode(tester, 'Hopeful');
 
       expect(picked, isNotNull);
       expect(picked!.primary, 'Happy');
       expect(picked!.secondary, 'Optimistic');
       expect(picked!.tertiary, 'Hopeful');
+    });
+
+    testWidgets('dragging out and lifting on a leaf commits it', (tester) async {
+      EmotionRef? picked;
+      await tester.pumpWidget(_harness(onChanged: (e) => picked = e));
+      await tester.pumpAndSettle();
+
+      final button = tester.getRect(find.byType(CompositedTransformTarget));
+
+      // Press the button, then slide out through the tiers without lifting.
+      // The first move is what wins the drag and opens the dial.
+      final drag = await tester.startGesture(button.center);
+      await drag.moveBy(const Offset(0, -30));
+      await tester.pumpAndSettle();
+
+      await drag.moveTo(_nodeRect(tester, 'Happy').center);
+      await tester.pumpAndSettle();
+
+      await drag.moveTo(_nodeRect(tester, 'Optimistic').center);
+      await tester.pumpAndSettle();
+
+      final leaf = _nodeRect(tester, 'Hopeful').center;
+      await drag.moveTo(leaf);
+      await tester.pumpAndSettle();
+
+      // Lifting off the leaf is what selects it.
+      expect(picked, isNull);
+      await drag.up();
+      await tester.pumpAndSettle();
+
+      expect(picked, isNotNull);
+      expect(picked!.tertiary, 'Hopeful');
+    });
+
+    testWidgets('lifting off the bands selects nothing and keeps the dial open',
+        (tester) async {
+      EmotionRef? picked;
+      var changed = false;
+      await tester.pumpWidget(_harness(onChanged: (e) {
+        picked = e;
+        changed = true;
+      }));
+      await tester.pumpAndSettle();
+
+      final button = tester.getRect(find.byType(CompositedTransformTarget));
+      final drag = await tester.startGesture(button.center);
+      await drag.moveBy(const Offset(0, -30));
+      await tester.pumpAndSettle();
+
+      await drag.moveTo(_nodeRect(tester, 'Happy').center);
+      await tester.pumpAndSettle();
+      await drag.moveTo(const Offset(370, 820)); // empty corner
+      await tester.pumpAndSettle();
+      await drag.up();
+      await tester.pumpAndSettle();
+
+      expect(changed, isFalse);
+      expect(picked, isNull);
+      // Still open, so the tap-to-drill fallback keeps working.
+      expect(find.text('Optimistic'), findsOneWidget);
     });
   });
 
@@ -149,14 +221,15 @@ void main() {
       tertiary: 'Hopeful',
       emoji: '🌱',
     );
-    await tester.pumpWidget(_harness(value: picked, onChanged: (e) => picked = e));
+    await tester
+        .pumpWidget(_harness(value: picked, onChanged: (e) => picked = e));
     await tester.pumpAndSettle();
 
     final label = tester.getRect(find.text('Hopeful'));
     final clear = tester.getRect(find.byIcon(Icons.close_rounded));
 
-    // Same pill: the clear icon is to the right of the label and vertically
-    // centred with it, with no gap-sized whitespace between the halves.
+    // One pill: the clear half is immediately right of the emotion half and
+    // shares its vertical centre.
     expect(clear.center.dx, greaterThan(label.right));
     expect((clear.center.dy - label.center.dy).abs(), lessThan(16));
 
@@ -168,8 +241,8 @@ void main() {
 
 /// Least-squares centre of the circle through [points] (Kåsa's linear fit).
 Offset _fitCircleCentre(List<Offset> points) {
-  var sx = 0.0, sy = 0.0, sxx = 0.0, syy = 0.0, sxy = 0.0, sxz = 0.0, syz = 0.0;
-  var sz = 0.0;
+  var sx = 0.0, sy = 0.0, sxx = 0.0, syy = 0.0, sxy = 0.0;
+  var sxz = 0.0, syz = 0.0, sz = 0.0;
   for (final p in points) {
     final z = p.dx * p.dx + p.dy * p.dy;
     sx += p.dx;
