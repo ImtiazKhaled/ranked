@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../models/tier.dart';
+import '../../theme/app_theme.dart';
 
 /// Row of selectable S/A/B/C/D tier badges.
 class TierSelector extends StatelessWidget {
@@ -48,12 +49,12 @@ class _TierOption extends StatelessWidget {
         alignment: Alignment.center,
         decoration: BoxDecoration(
           gradient: selected ? tier.gradient : null,
-          color: selected ? null : const Color(0xFF1E1E2C),
+          color: selected ? null : AppTheme.surface,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: selected
                 ? Colors.white.withValues(alpha: 0.9)
-                : tier.colorStart.withValues(alpha: 0.5),
+                : tier.colorStart.withValues(alpha: 0.55),
             width: selected ? 2 : 1.5,
           ),
           boxShadow: selected

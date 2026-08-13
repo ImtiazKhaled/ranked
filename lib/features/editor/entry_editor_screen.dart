@@ -10,6 +10,7 @@ import '../../models/emotion.dart';
 import '../../models/entry.dart';
 import '../../models/tier.dart';
 import '../../providers/providers.dart';
+import '../../theme/app_theme.dart';
 import '../../widgets/gradient_border_box.dart';
 import '../emotion/emotion_picker.dart';
 import 'tag_multiselect.dart';
@@ -155,7 +156,7 @@ class _EntryEditorScreenState extends ConsumerState<EntryEditorScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(_isEditing ? 'Edit entry' : 'New entry'),
+        title: Text(_isEditing ? 'Edit rank' : 'New rank'),
         leading: IconButton(
           icon: const Icon(Icons.close_rounded),
           onPressed: _close,
@@ -232,11 +233,11 @@ class _EntryEditorScreenState extends ConsumerState<EntryEditorScreen> {
         padding: const EdgeInsets.only(bottom: 10),
         child: Text(
           text,
-          style: TextStyle(
+          style: const TextStyle(
             fontWeight: FontWeight.w700,
             fontSize: 13,
             letterSpacing: 0.4,
-            color: Colors.white.withValues(alpha: 0.6),
+            color: AppTheme.textMuted,
           ),
         ),
       );
@@ -280,20 +281,19 @@ class _EntryEditorScreenState extends ConsumerState<EntryEditorScreen> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: Colors.white.withValues(alpha: 0.15),
+            color: AppTheme.hairline,
             width: 1.5,
           ),
         ),
-        child: Center(
+        child: const Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.add_photo_alternate_outlined,
-                  color: Colors.white.withValues(alpha: 0.5)),
-              const SizedBox(height: 8),
+              Icon(Icons.add_photo_alternate_outlined, color: AppTheme.textMuted),
+              SizedBox(height: 8),
               Text(
                 'Add an image (optional)',
-                style: TextStyle(color: Colors.white.withValues(alpha: 0.5)),
+                style: TextStyle(color: AppTheme.textMuted),
               ),
             ],
           ),

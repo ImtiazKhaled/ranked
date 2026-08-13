@@ -1,11 +1,11 @@
 {
-    "name": "ranked",
-    "short_name": "ranked",
+    "name": "Ranked",
+    "short_name": "Ranked",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#F5F6FA",
+    "theme_color": "#7C3AED",
+    "description": "Ranked — log and rank your moments.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

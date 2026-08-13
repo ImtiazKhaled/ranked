@@ -4,6 +4,7 @@ import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../providers/providers.dart';
+import '../../theme/app_theme.dart';
 import '../../theme/gradients.dart';
 import '../../widgets/tag_chip.dart';
 import 'entry_card.dart';
@@ -88,15 +89,15 @@ class ListScreen extends ConsumerWidget {
                       padding:
                           const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.08),
+                        color: AppTheme.hairline,
                         borderRadius: BorderRadius.circular(999),
                       ),
                       child: Text(
                         '${section.entries.length}',
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
-                          color: Colors.white.withValues(alpha: 0.6),
+                          color: AppTheme.textMuted,
                         ),
                       ),
                     ),
@@ -208,7 +209,7 @@ class _EmptyState extends StatelessWidget {
             filtered
                 ? 'Try clearing your filters.'
                 : 'Tap “New entry” to log your first moment.',
-            style: TextStyle(color: Colors.white.withValues(alpha: 0.5)),
+            style: const TextStyle(color: AppTheme.textMuted),
           ),
         ],
       ),

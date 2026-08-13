@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/tag.dart';
 import '../../providers/providers.dart';
+import '../../theme/app_theme.dart';
 import '../../widgets/tag_chip.dart';
 
 /// Multi-select tag input. Existing tags are suggested in usage-ranked order;
@@ -114,8 +115,8 @@ class _TagMultiSelectState extends ConsumerState<TagMultiSelect> {
             if (suggestions.isEmpty && (q.isEmpty || exactExists))
               Text(
                 q.isEmpty ? 'No tags yet — type to create one.' : 'Already added.',
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.4),
+                style: const TextStyle(
+                  color: AppTheme.textMuted,
                   fontSize: 13,
                 ),
               ),

@@ -31,7 +31,7 @@ class RankedApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp.router(
-      title: 'New Rank',
+      title: 'Ranked',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       routerConfig: _router,

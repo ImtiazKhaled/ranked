@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../models/entry.dart';
 import '../../providers/providers.dart';
+import '../../theme/app_theme.dart';
 import '../../theme/gradients.dart';
 import '../../widgets/gradient_border_box.dart';
 import '../../widgets/tag_chip.dart';
@@ -71,10 +72,10 @@ class EntryCard extends ConsumerWidget {
                     entry.description,
                     maxLines: 4,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 13,
                       height: 1.35,
-                      color: Colors.white.withValues(alpha: 0.65),
+                      color: AppTheme.textMuted,
                     ),
                   ),
                 ],
